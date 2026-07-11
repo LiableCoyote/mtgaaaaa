@@ -229,15 +229,20 @@ function parsePlayerLog(text) {
   const unresolved = best ? best.unresolved : 0;
 
   // Wildcards: take the last value seen for each (most recent inventory line).
-  const grab = (re) => {
-    let last = null;
-    for (const m of text.matchAll(re)) last = m[1];
-    return last == null ? null : Number(last);
+  // Key names differ across Arena versions: older logs use wcCommon…, newer ones
+  // use WildCardCommons / WildCardUnCommons / WildCardRares / WildCardMythics.
+  const grab = (...res) => {
+    for (const re of res) {
+      let last = null;
+      for (const m of text.matchAll(re)) last = m[1];
+      if (last != null) return Number(last);
+    }
+    return null;
   };
-  const c = grab(/"wcCommon"\s*:\s*(\d+)/g);
-  const u = grab(/"wcUncommon"\s*:\s*(\d+)/g);
-  const r = grab(/"wcRare"\s*:\s*(\d+)/g);
-  const m = grab(/"wcMythic"\s*:\s*(\d+)/g);
+  const c = grab(/"wcCommon"\s*:\s*(\d+)/g, /"WildCardCommons"\s*:\s*(\d+)/g);
+  const u = grab(/"wcUncommon"\s*:\s*(\d+)/g, /"WildCardUnCommons"\s*:\s*(\d+)/g);
+  const r = grab(/"wcRare"\s*:\s*(\d+)/g, /"WildCardRares"\s*:\s*(\d+)/g);
+  const m = grab(/"wcMythic"\s*:\s*(\d+)/g, /"WildCardMythics"\s*:\s*(\d+)/g);
   const wildcards =
     [c, u, r, m].some((v) => v != null) ? { c: c || 0, u: u || 0, r: r || 0, m: m || 0 } : null;
 
@@ -245,7 +250,8 @@ function parsePlayerLog(text) {
     bytes: text.length,
     hasCardsMarker: /GetPlayerCardsV3|PlayerCardsV3|GetPlayerCards/.test(text),
     hasInventory: /GetPlayerInventory|InventoryInfo/.test(text),
-    hasWc: /wcCommon/.test(text),
+    hasWc: wildcards != null,
+    hasDecks: /"MainDeck"|DeckSummaries/.test(text),
     candidates: candidates.length,
   };
 
@@ -358,28 +364,41 @@ function parseTextList(text) {
 
 // ---- apply an import ----
 function applyImport(result, { merge = false } = {}) {
-  if (result.resolved === 0 && result.unresolved === 0) {
+  const gotCards = result.resolved > 0 || result.unresolved > 0;
+  if (!gotCards) {
     if (result.source === 'log') {
       const d = result.diag || {};
+      // Apply wildcards even if the card list is missing — they're still useful.
+      if (result.wildcards) {
+        wildcards = { ...result.wildcards };
+        syncWildcardInputs();
+        save();
+        render();
+      }
       let msg;
-      if (!d.hasCardsMarker && !d.hasInventory && !d.hasWc) {
+      if (result.wildcards || d.hasInventory) {
         msg =
-          'No collection or inventory data in this log. Detailed Logs was probably off when ' +
-          'Arena last launched. Turn on MTGA → Settings → Account → Detailed Logs, then fully ' +
-          'quit and reopen Arena, open your Collection, and upload the new Player.log.';
-      } else if (d.hasCardsMarker || d.hasWc) {
+          `Read your wildcards${
+            result.wildcards ? ` (${result.wildcards.c}/${result.wildcards.u}/${result.wildcards.r}/${result.wildcards.m})` : ''
+          }, but Arena did not log your card collection this session — modern Arena serves it ` +
+          'from a local cache, so it is only written to the log when it re-syncs from the server. ' +
+          'To force it: fully quit Arena, make sure Detailed Logs is on, relaunch, then open a ' +
+          'booster or any pack (or wait for a daily/quest reward) so your collection changes and ' +
+          'gets re-logged — then upload Player.log again.';
+      } else if (!d.hasCardsMarker && !d.hasInventory) {
         msg =
-          'Found Arena data in the log but could not read the card list from this version. ' +
-          'Please share the single line containing "GetPlayerCardsV3" so I can match its format ' +
-          '(counts only — no personal info).';
+          'No collection or inventory data in this log. Detailed Logs was probably off when Arena ' +
+          'last launched. Turn it on (Settings → Account → Detailed Logs), fully quit and reopen ' +
+          'Arena, then upload the new Player.log.';
       } else {
-        msg = 'That looks like a Player.log, but no collection snapshot was found. Open your ' +
-          'Collection in Arena, then upload Player.log again.';
+        msg =
+          'Found Arena data but could not read the card list from this version. Share the log line ' +
+          'containing the collection so I can match its format (counts only — no personal info).';
       }
       setStatus(
-        `${msg}  [diag: ${(d.bytes / 1024) | 0}KB, cardsMarker=${d.hasCardsMarker}, ` +
-          `inventory=${d.hasInventory}, wildcards=${d.hasWc}, candidates=${d.candidates}]`,
-        'err'
+        `${msg}  [diag: ${(d.bytes / 1024) | 0}KB, cards=${d.hasCardsMarker}, inventory=${d.hasInventory}, ` +
+          `wildcards=${d.hasWc}, decks=${d.hasDecks}]`,
+        result.wildcards ? '' : 'err'
       );
     } else {
       setStatus('Nothing recognizable found in that input.', 'err');
