@@ -1,0 +1,4 @@
+node_modules/
+*.jsonl.gz
+default_cards*.json
+.DS_Store

@@ -1,0 +1,41 @@
+name: Refresh card data
+
+# Rebuilds site/data/cards.json from the latest Scryfall bulk data so wildcard
+# rarities stay current as new sets release. Runs monthly, or on demand.
+on:
+  schedule:
+    - cron: '17 6 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Rebuild cards.json from Scryfall
+        run: node scripts/build-cards.mjs
+
+      - name: Validate reference decks still resolve
+        run: node scripts/validate-decks.mjs
+
+      - name: Commit if changed
+        run: |
+          if [[ -n "$(git status --porcelain site/data/cards.json)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add site/data/cards.json
+            git commit -m "chore: refresh Arena card data from Scryfall"
+            git push
+          else
+            echo "No changes to cards.json."
+          fi

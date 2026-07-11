@@ -1,0 +1,13 @@
+{
+  "name": "mtgaaaaa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static site that reads your MTG Arena collection + wildcards and suggests decks you can build.",
+  "type": "module",
+  "scripts": {
+    "build:cards": "node scripts/build-cards.mjs",
+    "validate": "node scripts/validate-decks.mjs",
+    "serve": "python3 -m http.server 8137 --directory site"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MTGAAAAA — Arena Collection Deck Suggester</title>
+    <meta
+      name="description"
+      content="Upload your MTG Arena collection, see what you own and how many wildcards each deck needs, and jump to deck-sharing sites."
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%83%8F%3C/text%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap">
+        <h1>🃏 MTGAAAAA</h1>
+        <p class="tagline">
+          Load your <strong>MTG&nbsp;Arena</strong> collection + wildcards, then see which decks you can
+          build — and how many wildcards each one still costs.
+        </p>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <!-- ============ COLLECTION ============ -->
+      <section id="collection" class="panel">
+        <div class="panel-head">
+          <h2>1 · Your collection</h2>
+          <button id="how-toggle" class="link-btn" type="button" aria-expanded="false">
+            How do I export my collection?
+          </button>
+        </div>
+
+        <div id="how" class="how hidden">
+          <p>MTG Arena has no public collection API, so you import an export from a third-party tool:</p>
+          <ul>
+            <li>
+              <strong>MTGA Tool (mtgatool)</strong> — tracks your collection live; export it as JSON
+              (a map of Arena card IDs to counts).
+            </li>
+            <li><strong>Untapped.gg</strong> companion — exports your collection.</li>
+            <li>
+              Or paste a plain <strong>text list</strong> like <code>4 Lightning Strike</code> (one card
+              per line) into the box below — handy for testing or building from a decklist.
+            </li>
+          </ul>
+          <p class="muted">
+            Everything runs in your browser. Nothing is uploaded anywhere; your collection is saved
+            only in this browser's local storage.
+          </p>
+        </div>
+
+        <div class="import-grid">
+          <div
+            id="dropzone"
+            class="dropzone"
+            tabindex="0"
+            role="button"
+            aria-label="Upload a collection JSON file"
+          >
+            <input id="file-input" type="file" accept=".json,application/json" hidden />
+            <div class="dz-inner">
+              <span class="dz-icon">⬆️</span>
+              <span><strong>Upload collection JSON</strong></span>
+              <span class="muted">Drag &amp; drop, or click to choose a file</span>
+            </div>
+          </div>
+
+          <div class="paste-box">
+            <label for="paste-area"><strong>…or paste a card list / JSON</strong></label>
+            <textarea
+              id="paste-area"
+              rows="6"
+              placeholder="4 Lightning Strike&#10;3 Sheoldred, the Apocalypse&#10;2 Get Lost&#10;&#10;(or paste collection JSON here)"
+            ></textarea>
+            <button id="paste-load" class="btn" type="button">Load pasted list</button>
+          </div>
+        </div>
+
+        <div class="wildcards">
+          <h3>Wildcards</h3>
+          <div class="wc-inputs">
+            <label class="wc wc-c"
+              ><span>Common</span><input id="wc-c" type="number" min="0" value="0" /></label
+            >
+            <label class="wc wc-u"
+              ><span>Uncommon</span><input id="wc-u" type="number" min="0" value="0" /></label
+            >
+            <label class="wc wc-r"
+              ><span>Rare</span><input id="wc-r" type="number" min="0" value="0" /></label
+            >
+            <label class="wc wc-m"
+              ><span>Mythic</span><input id="wc-m" type="number" min="0" value="0" /></label
+            >
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="sample-btn" class="btn btn-ghost" type="button">Try a sample collection</button>
+          <button id="clear-btn" class="btn btn-ghost" type="button">Clear collection</button>
+          <span id="import-status" class="status" role="status" aria-live="polite"></span>
+        </div>
+
+        <div id="collection-summary" class="summary hidden"></div>
+      </section>
+
+      <!-- ============ DECKS ============ -->
+      <section id="decks" class="panel">
+        <div class="panel-head">
+          <h2>2 · Deck suggestions</h2>
+          <div class="deck-controls">
+            <label
+              >Sort
+              <select id="sort-select">
+                <option value="completion">Closest to complete</option>
+                <option value="wildcards">Fewest wildcards to finish</option>
+                <option value="name">Name</option>
+              </select>
+            </label>
+            <label class="check"
+              ><input id="only-craftable" type="checkbox" /> Only decks I can finish now</label
+            >
+          </div>
+        </div>
+        <p class="muted deck-hint">
+          Ranked against <strong>your</strong> collection. Basic lands are always counted as owned.
+          Load a collection above to see completion and wildcard costs update.
+        </p>
+        <div id="deck-list" class="deck-list"></div>
+      </section>
+
+      <!-- ============ DECK SITES ============ -->
+      <section id="sites" class="panel">
+        <div class="panel-head"><h2>3 · Find more decks</h2></div>
+        <p class="muted">Deck-sharing sites for live, up-to-date meta lists you can import into Arena:</p>
+        <div id="site-links" class="site-links"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p id="data-meta" class="muted"></p>
+        <p class="muted">
+          Card data from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.
+          Not affiliated with or endorsed by Wizards of the Coast. Runs entirely in your browser.
+        </p>
+      </div>
+    </footer>
+
+    <script src="js/app.js" type="module"></script>
+  </body>
+</html>
