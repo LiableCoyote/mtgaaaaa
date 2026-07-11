@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build:cards": "node scripts/build-cards.mjs",
+    "fetch:meta": "node scripts/fetch-meta-decks.mjs",
     "validate": "node scripts/validate-decks.mjs",
     "serve": "python3 -m http.server 8137"
   },

@@ -9,7 +9,8 @@ Everything runs in your browser. Your collection never leaves your machine; it's
 - **Import your collection** — upload a JSON export from a tracker (e.g. [MTGA Tool](https://mtgatool.com/)) or paste a plain text card list like `4 Lightning Strike`. Both Arena card IDs (grpIds) and card names are resolved.
 - **Enter your wildcards** — common / uncommon / rare / mythic (auto-detected from the export when present).
 - **See collection stats** — unique cards, copies, and a rarity breakdown.
-- **Rank decks** — each bundled reference deck shows a completion bar, the wildcards needed per rarity, and a "Craftable now" badge when your wildcards cover the gap. Expand any deck for a card-by-card owned/needed view. Basic lands are always counted as owned.
+- **Rank decks** — each deck shows a completion bar, the wildcards needed per rarity, and a "Craftable now" badge when your wildcards cover the gap. Expand any deck for a card-by-card owned/needed view. Basic lands are always counted as owned.
+- **Auto-refreshed meta library** — alongside the bundled `Sample` decks, a `Meta` library is pulled weekly from [Archidekt](https://archidekt.com) for Standard and Historic, filtered to decks whose entire maindeck is *currently legal* and resolves against the Arena card data. Filter the deck list by format.
 - **Find more decks** — quick links to Moxfield, Aetherhub, MTGGoldfish, MTGArena Zone, Untapped.gg, 17Lands and Scryfall.
 
 ## How the collection import works
@@ -35,14 +36,17 @@ branch", root folder) hosts it with no extra configuration.
 index.html
 css/styles.css
 js/app.js             # all app logic, no build step, no dependencies
-data/cards.json       # slim Arena card dataset (name/arena_id -> rarity, color)
-data/decks.json       # bundled reference decklists
+data/cards.json       # slim Arena card dataset (name/arena_id -> rarity, color, legality)
+data/decks.json       # bundled reference decklists (the "Sample" decks)
+data/meta-decks.json  # auto-refreshed community meta decks (the "Meta" decks)
 .nojekyll             # serve files as-is (skip Jekyll processing)
 scripts/
-  build-cards.mjs     # regenerate cards.json from Scryfall bulk data
-  validate-decks.mjs  # assert every deck card resolves + is a 60-card list
+  build-cards.mjs      # regenerate cards.json from Scryfall bulk data
+  fetch-meta-decks.mjs # rebuild meta-decks.json from Archidekt (CI)
+  validate-decks.mjs   # assert every bundled deck card resolves + is a 60-card list
 .github/workflows/
-  refresh-cards.yml   # monthly rebuild of cards.json from Scryfall
+  refresh-cards.yml       # monthly rebuild of cards.json from Scryfall
+  refresh-meta-decks.yml  # weekly rebuild of meta-decks.json from Archidekt
 ```
 
 ## Running locally
@@ -65,7 +69,26 @@ npm run validate       # checks the bundled decks still resolve
 
 The `refresh-cards` GitHub Action does this automatically once a month.
 
-## Adding or editing reference decks
+## The auto-refreshed meta library
+
+`scripts/fetch-meta-decks.mjs` runs server-side (in CI, so there is no browser
+CORS problem) and builds `data/meta-decks.json`:
+
+1. Pulls popular + recently-updated Standard and Historic decks from Archidekt.
+2. Extracts the maindeck (dropping Maybeboard/Considering categories, splitting off the sideboard).
+3. Keeps a deck **only if** its total maindeck is exactly 60 cards, every card resolves against `data/cards.json`, and every non-basic card is *currently legal* in that format (using the legality codes baked into `cards.json`). This automatically filters out rotated/old lists.
+
+```bash
+node scripts/fetch-meta-decks.mjs --per=12 --scan=90
+```
+
+It is deliberately polite to Archidekt (descriptive User-Agent, small paged
+requests, a delay between calls). The `refresh-meta-decks` GitHub Action runs it
+weekly. Why not Moxfield/MTGGoldfish? Moxfield restricts automated API access and
+neither sends the CORS headers a browser would need; Archidekt exposes a usable
+JSON API, so it's the source that can be refreshed cleanly.
+
+## Adding or editing the bundled Sample decks
 
 Edit `data/decks.json` (name, format, archetype, colors, mainboard, source link), then run `npm run validate` to confirm every card name resolves against the dataset and each list totals 60 cards.
 

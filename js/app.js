@@ -26,6 +26,7 @@ let CARDS = {}; // nameKey -> { n, r, ci, cmc, t, basic? }
 let ARENA = {}; // arena_id -> nameKey
 let DECKS = [];
 let META = {};
+let METADECKS_UPDATED = null;
 
 /** collection: Map<nameKey, count> */
 let collection = new Map();
@@ -47,6 +48,15 @@ function normName(name) {
 function lookup(name) {
   const key = normName(name);
   return CARDS[key] ? { key, card: CARDS[key] } : CARDS[key.split(' // ')[0]] ? { key: key.split(' // ')[0], card: CARDS[key.split(' // ')[0]] } : { key, card: null };
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function setStatus(msg, kind = '') {
@@ -278,7 +288,9 @@ function renderDecks() {
   const evals = DECKS.map(evalDeck);
   const sort = $('#sort-select').value;
   const onlyCraft = $('#only-craftable').checked;
+  const fmt = $('#format-select').value;
   let list = evals.slice();
+  if (fmt) list = list.filter((e) => e.deck.format === fmt);
   if (onlyCraft) list = list.filter((e) => e.canCraft);
   list.sort((a, b) => {
     if (sort === 'name') return a.deck.name.localeCompare(b.deck.name);
@@ -307,13 +319,17 @@ function deckCardHtml(e) {
 
   const chips = RARITY_ORDER.map((r) => wcChip(r, e.miss[r])).join('');
   const finishLabel = e.totalMissing === 0 ? 'Ready to play' : `${e.totalMissing} cards / wildcards to finish`;
+  const srcTag =
+    d.kind === 'meta'
+      ? `<span class="src-tag src-meta">Meta</span>`
+      : `<span class="src-tag src-sample">Sample</span>`;
 
   return `
   <div class="deck-card">
     <div class="deck-top">
       <div class="deck-id">
-        <div class="deck-name">${d.name} ${pips(d.colors)} ${badge}</div>
-        <div class="deck-meta">${d.format} · ${d.archetype}</div>
+        <div class="deck-name">${srcTag} ${escapeHtml(d.name)} ${pips(d.colors)} ${badge}</div>
+        <div class="deck-meta">${d.format} · ${d.archetype} · ${d.source.site}</div>
       </div>
       <div class="wc-cost">${chips}</div>
       <div class="deck-prog">
@@ -322,13 +338,24 @@ function deckCardHtml(e) {
       </div>
     </div>
     <div class="deck-detail">
-      <p class="deck-desc">${d.description}</p>
+      <p class="deck-desc">${escapeHtml(d.description)}</p>
       ${cardTableHtml(e)}
+      ${sideboardHtml(d)}
       <div class="detail-links">
-        <a href="${d.source.url}" target="_blank" rel="noopener">More ${d.format} decks on ${d.source.site} ↗</a>
+        <a href="${escapeHtml(d.source.url)}" target="_blank" rel="noopener">${
+          d.kind === 'meta' ? 'Open this deck' : `More ${d.format} decks`
+        } on ${d.source.site} ↗</a>
       </div>
     </div>
   </div>`;
+}
+
+function sideboardHtml(d) {
+  if (!d.sideboard || !d.sideboard.length) return '';
+  const items = d.sideboard
+    .map((c) => `<span class="sb-item">${c.count}× ${escapeHtml(c.name)}</span>`)
+    .join('');
+  return `<div class="sideboard"><span class="sb-label">Sideboard</span>${items}</div>`;
 }
 
 function cardTableHtml(e) {
@@ -341,7 +368,9 @@ function cardTableHtml(e) {
           ? '<span class="have-ok">✓ have</span>'
           : `<span class="have-no">need ${row.missing}</span>`;
       const rr = row.r === 'land' ? 'land' : row.r;
-      const nameCell = row.unknown ? `${row.name} <span class="muted">(unknown)</span>` : row.name;
+      const nameCell = row.unknown
+        ? `${escapeHtml(row.name)} <span class="muted">(unknown)</span>`
+        : escapeHtml(row.name);
       return `<tr class="${have ? '' : 'missing'}">
         <td class="cnt">${row.need}</td>
         <td><span class="dot ${rr}"></span>${nameCell}</td>
@@ -517,7 +546,19 @@ function readFile(file) {
   reader.readAsText(file);
 }
 
+function populateFormatFilter() {
+  const formats = [...new Set(DECKS.map((d) => d.format))].sort();
+  const sel = $('#format-select');
+  for (const f of formats) {
+    const opt = document.createElement('option');
+    opt.value = f;
+    opt.textContent = f;
+    sel.appendChild(opt);
+  }
+}
+
 function wireControls() {
+  $('#format-select').addEventListener('change', renderDecks);
   $('#sort-select').addEventListener('change', renderDecks);
   $('#only-craftable').addEventListener('change', renderDecks);
   $('#how-toggle').addEventListener('click', () => {
@@ -543,9 +584,28 @@ async function init() {
     CARDS = cardsData.cards;
     ARENA = cardsData.arena;
     META = cardsData.counts || {};
-    DECKS = decksData.decks;
+    const bundled = decksData.decks.map((d) => ({ ...d, kind: 'sample' }));
+
+    // The auto-refreshed meta library is optional; tolerate it being absent.
+    let metaDecks = [];
+    try {
+      const md = await fetch('data/meta-decks.json');
+      if (md.ok) {
+        const mdData = await md.json();
+        METADECKS_UPDATED = mdData.updated || null;
+        metaDecks = (mdData.decks || []).map((d) => ({ ...d, kind: 'meta' }));
+      }
+    } catch (_) {
+      /* no meta library yet */
+    }
+
+    DECKS = [...metaDecks, ...bundled];
+    populateFormatFilter();
+    const metaBit = metaDecks.length
+      ? ` · ${metaDecks.length} auto-refreshed meta decks (${(METADECKS_UPDATED || '').slice(0, 10)})`
+      : '';
     $('#data-meta').textContent =
-      `Card dataset: ${META.names?.toLocaleString?.() || '?'} Arena cards · ${DECKS.length} reference decks · updated ${(cardsData.updated || '').slice(0, 10)}.`;
+      `Card dataset: ${META.names?.toLocaleString?.() || '?'} Arena cards · updated ${(cardsData.updated || '').slice(0, 10)} · ${bundled.length} sample decks${metaBit}.`;
   } catch (err) {
     setStatus('Failed to load card data: ' + err.message, 'err');
     $('#deck-list').innerHTML = `<p class="muted">Could not load card data. If you are viewing this locally, serve the folder over HTTP (e.g. <code>python3 -m http.server</code>) so <code>fetch</code> can read the data files.</p>`;

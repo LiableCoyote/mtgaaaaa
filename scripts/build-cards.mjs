@@ -22,6 +22,26 @@ const RARITY = { common: 'c', uncommon: 'u', rare: 'r', mythic: 'm', special: 's
 // Rank so we can prefer the cheapest craftable rarity in Arena (a card printed
 // at multiple rarities costs the lower wildcard to craft).
 const RANK = { c: 0, u: 1, r: 2, m: 3, s: 4, b: 5 };
+// Arena-playable formats -> single-letter codes stored in each card's `leg`
+// field, so decks can be filtered to what is currently legal.
+const FORMAT_CODE = {
+  standard: 'S',
+  alchemy: 'A',
+  historic: 'H',
+  explorer: 'E',
+  timeless: 'T',
+  brawl: 'B', // Historic Brawl
+  standardbrawl: 'b',
+};
+
+function legalityCodes(legalities) {
+  if (!legalities) return '';
+  let out = '';
+  for (const [fmt, code] of Object.entries(FORMAT_CODE)) {
+    if (legalities[fmt] === 'legal') out += code;
+  }
+  return out;
+}
 
 // Normalize a card name into a stable lookup key: lowercase, strip diacritics,
 // collapse whitespace. Double-faced names keep their "//" so both the full name
@@ -90,6 +110,7 @@ async function main() {
       ci: (c.color_identity || []).join(''),
       cmc: c.cmc ?? 0,
       t: (c.type_line || '').split(' //')[0].split('—')[0].trim(),
+      leg: legalityCodes(c.legalities),
       basic: isBasic || undefined,
       set: c.set,
       rel: released,
@@ -107,7 +128,15 @@ async function main() {
 
   const cardsObj = {};
   for (const [k, v] of cards) {
-    cardsObj[k] = { n: v.n, r: v.r, ci: v.ci, cmc: v.cmc, t: v.t, ...(v.basic ? { basic: 1 } : {}) };
+    cardsObj[k] = {
+      n: v.n,
+      r: v.r,
+      ci: v.ci,
+      cmc: v.cmc,
+      t: v.t,
+      ...(v.leg ? { leg: v.leg } : {}),
+      ...(v.basic ? { basic: 1 } : {}),
+    };
   }
 
   const out = {

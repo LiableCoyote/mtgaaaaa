@@ -114,6 +114,12 @@
           <h2>2 · Deck suggestions</h2>
           <div class="deck-controls">
             <label
+              >Format
+              <select id="format-select">
+                <option value="">All</option>
+              </select>
+            </label>
+            <label
               >Sort
               <select id="sort-select">
                 <option value="completion">Closest to complete</option>
@@ -128,7 +134,10 @@
         </div>
         <p class="muted deck-hint">
           Ranked against <strong>your</strong> collection. Basic lands are always counted as owned.
-          Load a collection above to see completion and wildcard costs update.
+          Load a collection above to see completion and wildcard costs update. The
+          <span class="src-tag src-meta">Meta</span> library auto-refreshes weekly from Archidekt,
+          filtered to currently-legal decks; <span class="src-tag src-sample">Sample</span> decks are
+          bundled examples.
         </p>
         <div id="deck-list" class="deck-list"></div>
       </section>
