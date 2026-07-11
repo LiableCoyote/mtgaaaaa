@@ -110,36 +110,123 @@ function looksLikePlayerLog(t) {
   );
 }
 
-function parsePlayerLog(text) {
+// Scan out the balanced JSON value ({...} or [...]) that begins at/after `from`,
+// respecting strings and escapes. Returns the substring, or null.
+function extractBalanced(text, from) {
+  let i = from;
+  while (i < text.length && text[i] !== '{' && text[i] !== '[') {
+    // Give up if we hit the next log line before any JSON starts.
+    if (text[i] === '\n' && i > from + 2) return null;
+    i++;
+  }
+  if (i >= text.length) return null;
+  const open = text[i];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let j = i; j < text.length; j++) {
+    const ch = text[j];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) return text.slice(i, j + 1);
+    }
+  }
+  return null;
+}
+
+// Try to turn any parsed JSON value into { counts, resolved, unresolved }.
+// Handles flat maps ({ "<arenaId>": n }), arrays of card objects, and common
+// wrappers (payload / cards / collection), including a stringified payload.
+function coerceCollection(val, depth = 0) {
+  if (val == null || depth > 4) return null;
+  if (typeof val === 'string') {
+    try {
+      return coerceCollection(JSON.parse(val), depth + 1);
+    } catch (_) {
+      return null;
+    }
+  }
   const counts = new Map();
   let resolved = 0;
   let unresolved = 0;
+  const addId = (id, n) => {
+    const cnt = Number(n);
+    if (!Number.isFinite(cnt) || cnt <= 0) return;
+    const key = ARENA[String(id)];
+    if (key) {
+      counts.set(key, (counts.get(key) || 0) + cnt);
+      resolved++;
+    } else if (/^\d+$/.test(String(id))) unresolved++;
+  };
 
-  // The collection is the largest object made entirely of "<arenaId>": <count>
-  // pairs. Marker text has changed across Arena versions, so match on shape and
-  // take the longest object (the most recent full snapshot has the most cards).
-  const objRe = /\{(?:\s*"\d+"\s*:\s*\d+\s*,?){8,}\}/g;
-  let best = null;
-  for (const m of text.matchAll(objRe)) if (!best || m[0].length > best.length) best = m[0];
-  if (best) {
-    let obj = null;
-    try {
-      obj = JSON.parse(best);
-    } catch (_) {
-      /* ignore */
-    }
-    if (obj) {
-      for (const [id, c] of Object.entries(obj)) {
-        const n = Number(c);
-        if (!Number.isFinite(n) || n <= 0) continue;
-        const key = ARENA[String(id)];
-        if (key) {
-          counts.set(key, (counts.get(key) || 0) + n);
-          resolved++;
-        } else unresolved++;
+  if (Array.isArray(val)) {
+    for (const item of val) {
+      if (item && typeof item === 'object') {
+        const id = item.grpId ?? item.cardId ?? item.groupId ?? item.id ?? item.arena_id;
+        const n = item.count ?? item.quantity ?? item.owned ?? item.total ?? item.amount ?? 1;
+        if (id != null) addId(id, n);
       }
     }
+  } else if (typeof val === 'object') {
+    // Unwrap known wrappers first, keeping the best result.
+    for (const key of ['payload', 'Payload', 'cards', 'Cards', 'collection', 'Collection', 'cardsV3']) {
+      if (val[key] != null) {
+        const inner = coerceCollection(val[key], depth + 1);
+        if (inner && inner.resolved) return inner;
+      }
+    }
+    for (const [id, n] of Object.entries(val)) {
+      if (/^\d+$/.test(id)) addId(id, n);
+    }
   }
+  return resolved || unresolved ? { counts, resolved, unresolved } : null;
+}
+
+function parsePlayerLog(text) {
+  const candidates = [];
+
+  // Strategy A — shape: the longest run of "<digits>": <digits> pairs. This
+  // catches the flat collection map wherever it sits, nested or not.
+  const objRe = /\{(?:\s*"\d+"\s*:\s*\d+\s*,?){8,}\}/g;
+  let longest = null;
+  for (const m of text.matchAll(objRe)) if (!longest || m[0].length > longest.length) longest = m[0];
+  if (longest) candidates.push(longest);
+
+  // Strategy B — markers: balanced JSON right after a collection/inventory marker.
+  // Covers array-of-objects and enveloped payload formats used by newer clients.
+  const markerRe = /(GetPlayerCardsV3|PlayerCardsV3|GetPlayerCards|InventoryInfo|GetPlayerInventory)/g;
+  let mm;
+  let guard = 0;
+  while ((mm = markerRe.exec(text)) && guard < 60) {
+    guard++;
+    const js = extractBalanced(text, mm.index + mm[0].length);
+    if (js) candidates.push(js);
+  }
+
+  let best = null;
+  for (const js of candidates) {
+    let val;
+    try {
+      val = JSON.parse(js);
+    } catch (_) {
+      continue;
+    }
+    const res = coerceCollection(val);
+    if (res && (!best || res.resolved > best.resolved)) best = res;
+  }
+
+  const counts = best ? best.counts : new Map();
+  const resolved = best ? best.resolved : 0;
+  const unresolved = best ? best.unresolved : 0;
 
   // Wildcards: take the last value seen for each (most recent inventory line).
   const grab = (re) => {
@@ -154,7 +241,15 @@ function parsePlayerLog(text) {
   const wildcards =
     [c, u, r, m].some((v) => v != null) ? { c: c || 0, u: u || 0, r: r || 0, m: m || 0 } : null;
 
-  return { counts, resolved, unresolved, wildcards, source: 'log' };
+  const diag = {
+    bytes: text.length,
+    hasCardsMarker: /GetPlayerCardsV3|PlayerCardsV3|GetPlayerCards/.test(text),
+    hasInventory: /GetPlayerInventory|InventoryInfo/.test(text),
+    hasWc: /wcCommon/.test(text),
+    candidates: candidates.length,
+  };
+
+  return { counts, resolved, unresolved, wildcards, source: 'log', diag };
 }
 
 function parseJson(json) {
@@ -265,10 +360,25 @@ function parseTextList(text) {
 function applyImport(result, { merge = false } = {}) {
   if (result.resolved === 0 && result.unresolved === 0) {
     if (result.source === 'log') {
+      const d = result.diag || {};
+      let msg;
+      if (!d.hasCardsMarker && !d.hasInventory && !d.hasWc) {
+        msg =
+          'No collection or inventory data in this log. Detailed Logs was probably off when ' +
+          'Arena last launched. Turn on MTGA → Settings → Account → Detailed Logs, then fully ' +
+          'quit and reopen Arena, open your Collection, and upload the new Player.log.';
+      } else if (d.hasCardsMarker || d.hasWc) {
+        msg =
+          'Found Arena data in the log but could not read the card list from this version. ' +
+          'Please share the single line containing "GetPlayerCardsV3" so I can match its format ' +
+          '(counts only — no personal info).';
+      } else {
+        msg = 'That looks like a Player.log, but no collection snapshot was found. Open your ' +
+          'Collection in Arena, then upload Player.log again.';
+      }
       setStatus(
-        'That looks like a Player.log, but no collection was found in it. Turn on ' +
-          'MTGA → Settings → Account → Detailed Logs, fully restart Arena, open your ' +
-          'Collection, then upload Player.log again.',
+        `${msg}  [diag: ${(d.bytes / 1024) | 0}KB, cardsMarker=${d.hasCardsMarker}, ` +
+          `inventory=${d.hasInventory}, wildcards=${d.hasWc}, candidates=${d.candidates}]`,
         'err'
       );
     } else {
