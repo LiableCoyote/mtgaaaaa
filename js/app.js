@@ -85,7 +85,7 @@ function load() {
 }
 
 // ---- collection parsing ----
-// Returns { counts: Map, resolved, unresolved, wildcards? }
+// Returns { counts: Map, resolved, unresolved, wildcards?, source? }
 function parseCollection(text) {
   const trimmed = text.trim();
   let json = null;
@@ -95,7 +95,66 @@ function parseCollection(text) {
     /* not JSON */
   }
   if (json !== null && typeof json === 'object') return parseJson(json);
+  if (looksLikePlayerLog(text)) return parsePlayerLog(text);
   return parseTextList(trimmed);
+}
+
+// MTG Arena writes the collection + wildcards to Player.log when "Detailed Logs"
+// is enabled. The collection is a big JSON object of Arena card id -> count; the
+// wildcards appear as wcCommon/wcUncommon/wcRare/wcMythic. We pull them straight
+// out of the log so no third-party tracker is needed.
+function looksLikePlayerLog(t) {
+  return (
+    /GetPlayerCardsV3|wcCommon|\[UnityCrossThreadLogger\]|Wizards Of The Coast/.test(t) ||
+    /\{(?:\s*"\d+"\s*:\s*\d+\s*,?){20,}\}/.test(t)
+  );
+}
+
+function parsePlayerLog(text) {
+  const counts = new Map();
+  let resolved = 0;
+  let unresolved = 0;
+
+  // The collection is the largest object made entirely of "<arenaId>": <count>
+  // pairs. Marker text has changed across Arena versions, so match on shape and
+  // take the longest object (the most recent full snapshot has the most cards).
+  const objRe = /\{(?:\s*"\d+"\s*:\s*\d+\s*,?){8,}\}/g;
+  let best = null;
+  for (const m of text.matchAll(objRe)) if (!best || m[0].length > best.length) best = m[0];
+  if (best) {
+    let obj = null;
+    try {
+      obj = JSON.parse(best);
+    } catch (_) {
+      /* ignore */
+    }
+    if (obj) {
+      for (const [id, c] of Object.entries(obj)) {
+        const n = Number(c);
+        if (!Number.isFinite(n) || n <= 0) continue;
+        const key = ARENA[String(id)];
+        if (key) {
+          counts.set(key, (counts.get(key) || 0) + n);
+          resolved++;
+        } else unresolved++;
+      }
+    }
+  }
+
+  // Wildcards: take the last value seen for each (most recent inventory line).
+  const grab = (re) => {
+    let last = null;
+    for (const m of text.matchAll(re)) last = m[1];
+    return last == null ? null : Number(last);
+  };
+  const c = grab(/"wcCommon"\s*:\s*(\d+)/g);
+  const u = grab(/"wcUncommon"\s*:\s*(\d+)/g);
+  const r = grab(/"wcRare"\s*:\s*(\d+)/g);
+  const m = grab(/"wcMythic"\s*:\s*(\d+)/g);
+  const wildcards =
+    [c, u, r, m].some((v) => v != null) ? { c: c || 0, u: u || 0, r: r || 0, m: m || 0 } : null;
+
+  return { counts, resolved, unresolved, wildcards, source: 'log' };
 }
 
 function parseJson(json) {
@@ -205,7 +264,16 @@ function parseTextList(text) {
 // ---- apply an import ----
 function applyImport(result, { merge = false } = {}) {
   if (result.resolved === 0 && result.unresolved === 0) {
-    setStatus('Nothing recognizable found in that input.', 'err');
+    if (result.source === 'log') {
+      setStatus(
+        'That looks like a Player.log, but no collection was found in it. Turn on ' +
+          'MTGA → Settings → Account → Detailed Logs, fully restart Arena, open your ' +
+          'Collection, then upload Player.log again.',
+        'err'
+      );
+    } else {
+      setStatus('Nothing recognizable found in that input.', 'err');
+    }
     return;
   }
   if (!merge) collection = new Map();
@@ -216,7 +284,9 @@ function applyImport(result, { merge = false } = {}) {
   }
   save();
   render();
-  const parts = [`Loaded ${result.resolved} card entries`];
+  const parts = [
+    `Loaded ${result.resolved} card entries${result.source === 'log' ? ' from Player.log' : ''}`,
+  ];
   if (result.unresolved) parts.push(`${result.unresolved} not recognized`);
   if (result.wildcards) parts.push('wildcards detected');
   setStatus(parts.join(' · '), result.unresolved ? '' : 'ok');

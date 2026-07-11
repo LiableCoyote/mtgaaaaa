@@ -15,17 +15,23 @@ Everything runs in your browser. Your collection never leaves your machine; it's
 
 ## How the collection import works
 
-MTG Arena has no public collection API, so you import an export from a third-party tool. The site accepts, and auto-detects, several shapes:
+MTG Arena has no public collection API, but it *does* write your collection and
+wildcards to a log file — so **no third-party tracker (MTGA Tool, Untapped, …) is
+required**. The site accepts, and auto-detects, several shapes:
 
-| Input | Example |
+| Input | How to get it |
 | --- | --- |
-| Arena grpId map (MTGA Tool style) | `{ "cards": { "70123": 4 }, "wildcards": { "rare": 6 } }` |
+| **`Player.log`** (recommended, free) | Enable MTGA → Settings → Account → **Detailed Logs**, restart Arena, open your Collection, then upload `Player.log`. The site extracts the card counts *and* wildcards from it. |
+| Arena grpId map (tracker style) | `{ "cards": { "70123": 4 }, "wildcards": { "rare": 6 } }` |
 | grpId map (bare) | `{ "70123": 4, "70456": 2 }` |
 | Name map | `{ "Lightning Strike": 4 }` |
 | Array of entries | `[{ "name": "Get Lost", "count": 3 }]` |
-| Text list | `4 Lightning Strike` (one card per line) |
+| Text list | `4 Lightning Strike` (one per line) — also how you check any single deck via its "Export → Arena" |
 
-Unrecognized entries are counted and reported rather than silently dropped.
+`Player.log` lives at `%USERPROFILE%\AppData\LocalLow\Wizards Of The Coast\MTGA\Player.log`
+(Windows) or `~/Library/Logs/Wizards Of The Coast/MTGA/Player.log` (macOS). It is
+read locally in the browser and never uploaded. Unrecognized entries are counted
+and reported rather than silently dropped.
 
 ## Project layout
 

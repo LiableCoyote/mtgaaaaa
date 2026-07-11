@@ -36,21 +36,36 @@
         </div>
 
         <div id="how" class="how hidden">
-          <p>MTG Arena has no public collection API, so you import an export from a third-party tool:</p>
-          <ul>
+          <p>
+            <strong>Free method — no tracker, no payment.</strong> MTG Arena writes your whole
+            collection <em>and</em> your wildcard counts to a log file. You just switch the logging on
+            and upload the file here.
+          </p>
+          <ol>
             <li>
-              <strong>MTGA Tool (mtgatool)</strong> — tracks your collection live; export it as JSON
-              (a map of Arena card IDs to counts).
+              In MTG Arena: <strong>⚙️ Settings → Account →</strong> tick
+              <strong>“Detailed Logs (Plugin Support)”</strong>.
             </li>
-            <li><strong>Untapped.gg</strong> companion — exports your collection.</li>
-            <li>
-              Or paste a plain <strong>text list</strong> like <code>4 Lightning Strike</code> (one card
-              per line) into the box below — handy for testing or building from a decklist.
+            <li><strong>Fully quit and reopen Arena</strong> (this is required — the log is rewritten on launch).</li>
+            <li>Log in and open your <strong>Collection</strong> once.</li>
+            <li>Upload the <code>Player.log</code> file above. Find it at:
+              <ul>
+                <li><strong>Windows:</strong> <code>%APPDATA%\..\LocalLow\Wizards Of The Coast\MTGA\Player.log</code><br />
+                  (paste <code>%USERPROFILE%\AppData\LocalLow\Wizards Of The Coast\MTGA\</code> into the File Explorer address bar)</li>
+                <li><strong>macOS:</strong> <code>~/Library/Logs/Wizards Of The Coast/MTGA/Player.log</code></li>
+              </ul>
             </li>
-          </ul>
+          </ol>
           <p class="muted">
-            Everything runs in your browser. Nothing is uploaded anywhere; your collection is saved
-            only in this browser's local storage.
+            The site reads the collection and wildcards straight out of the log — no MTGA Tool or
+            Untapped needed. Other ways in: a collection <strong>JSON</strong> export (Arena card-id
+            map), or paste a plain <strong>text list</strong> like <code>4 Lightning Strike</code>
+            (one per line) — which is also how you check any single deck: use a deck's
+            “Export → Arena” from Moxfield/Archidekt/Arena itself.
+          </p>
+          <p class="muted">
+            Everything runs in your browser. The <code>Player.log</code> is read locally and never
+            uploaded anywhere; your collection is saved only in this browser's local storage.
           </p>
         </div>
 
@@ -62,10 +77,10 @@
             role="button"
             aria-label="Upload a collection JSON file"
           >
-            <input id="file-input" type="file" accept=".json,application/json" hidden />
+            <input id="file-input" type="file" accept=".json,.log,.txt,application/json,text/plain" hidden />
             <div class="dz-inner">
               <span class="dz-icon">⬆️</span>
-              <span><strong>Upload collection JSON</strong></span>
+              <span><strong>Upload Player.log or collection JSON</strong></span>
               <span class="muted">Drag &amp; drop, or click to choose a file</span>
             </div>
           </div>
