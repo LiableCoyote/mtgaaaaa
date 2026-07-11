@@ -5,7 +5,7 @@
 //   node scripts/build-cards.mjs [path/to/default_cards.jsonl.gz]
 //
 // If no local file is given, the script fetches the current bulk file from
-// Scryfall. Output is written to site/data/cards.json — a compact map keyed by a
+// Scryfall. Output is written to data/cards.json — a compact map keyed by a
 // normalized card name plus an arena_id -> name index, so the site can resolve
 // both name-based and Arena grpId-based collection exports fully offline.
 
@@ -16,7 +16,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUT = path.join(__dirname, '..', 'site', 'data', 'cards.json');
+const OUT = path.join(__dirname, '..', 'data', 'cards.json');
 
 const RARITY = { common: 'c', uncommon: 'u', rare: 'r', mythic: 'm', special: 's', bonus: 'b' };
 // Rank so we can prefer the cheapest craftable rarity in Arena (a card printed

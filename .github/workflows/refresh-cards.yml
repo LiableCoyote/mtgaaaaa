@@ -1,6 +1,6 @@
 name: Refresh card data
 
-# Rebuilds site/data/cards.json from the latest Scryfall bulk data so wildcard
+# Rebuilds data/cards.json from the latest Scryfall bulk data so wildcard
 # rarities stay current as new sets release. Runs monthly, or on demand.
 on:
   schedule:
@@ -15,8 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
 
       - uses: actions/setup-node@v4
         with:
@@ -30,10 +28,10 @@ jobs:
 
       - name: Commit if changed
         run: |
-          if [[ -n "$(git status --porcelain site/data/cards.json)" ]]; then
+          if [[ -n "$(git status --porcelain data/cards.json)" ]]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add site/data/cards.json
+            git add data/cards.json
             git commit -m "chore: refresh Arena card data from Scryfall"
             git push
           else

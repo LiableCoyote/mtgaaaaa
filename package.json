@@ -7,7 +7,7 @@
   "scripts": {
     "build:cards": "node scripts/build-cards.mjs",
     "validate": "node scripts/validate-decks.mjs",
-    "serve": "python3 -m http.server 8137 --directory site"
+    "serve": "python3 -m http.server 8137"
   },
   "license": "MIT"
 }

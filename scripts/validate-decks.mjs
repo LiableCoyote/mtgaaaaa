@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Validate that every card in site/data/decks.json resolves against
-// site/data/cards.json. Prints unresolved names (which would show as "unknown"
-// and break wildcard math) and a rarity breakdown per deck.
+// Validate that every card in data/decks.json resolves against data/cards.json.
+// Prints unresolved names (which would show as "unknown" and break wildcard
+// math) and a rarity breakdown per deck.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.join(__dirname, '..', 'site', 'data');
+const dataDir = path.join(__dirname, '..', 'data');
 const cards = JSON.parse(fs.readFileSync(path.join(dataDir, 'cards.json'), 'utf8')).cards;
 const decks = JSON.parse(fs.readFileSync(path.join(dataDir, 'decks.json'), 'utf8')).decks;
 

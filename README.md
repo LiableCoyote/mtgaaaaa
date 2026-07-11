@@ -28,18 +28,20 @@ Unrecognized entries are counted and reported rather than silently dropped.
 
 ## Project layout
 
+The site is served from the repository root so GitHub Pages ("Deploy from a
+branch", root folder) hosts it with no extra configuration.
+
 ```
-site/                 # the deployed static site (GitHub Pages serves this folder)
-  index.html
-  css/styles.css
-  js/app.js           # all app logic, no build step, no dependencies
-  data/cards.json     # slim Arena card dataset (name/arena_id -> rarity, color)
-  data/decks.json     # bundled reference decklists
+index.html
+css/styles.css
+js/app.js             # all app logic, no build step, no dependencies
+data/cards.json       # slim Arena card dataset (name/arena_id -> rarity, color)
+data/decks.json       # bundled reference decklists
+.nojekyll             # serve files as-is (skip Jekyll processing)
 scripts/
   build-cards.mjs     # regenerate cards.json from Scryfall bulk data
   validate-decks.mjs  # assert every deck card resolves + is a 60-card list
 .github/workflows/
-  deploy.yml          # deploy site/ to GitHub Pages on push to main
   refresh-cards.yml   # monthly rebuild of cards.json from Scryfall
 ```
 
@@ -48,13 +50,13 @@ scripts/
 The page uses `fetch` for its data files, so open it over HTTP (not `file://`):
 
 ```bash
-npm run serve          # serves site/ at http://localhost:8137
+npm run serve          # serves the repo root at http://localhost:8137
 # then open http://localhost:8137
 ```
 
 ## Regenerating the card data
 
-`site/data/cards.json` is built from Scryfall's `default_cards` bulk export, keeping only cards that exist in Arena and the fields the site needs (name, arena_id, rarity, color identity, type). For a card printed at multiple rarities it records the **cheapest** one, matching Arena's craft cost.
+`data/cards.json` is built from Scryfall's `default_cards` bulk export, keeping only cards that exist in Arena and the fields the site needs (name, arena_id, rarity, color identity, type). For a card printed at multiple rarities it records the **cheapest** one, matching Arena's craft cost.
 
 ```bash
 npm run build:cards    # fetches the latest bulk file from Scryfall and rewrites cards.json
@@ -65,11 +67,13 @@ The `refresh-cards` GitHub Action does this automatically once a month.
 
 ## Adding or editing reference decks
 
-Edit `site/data/decks.json` (name, format, archetype, colors, mainboard, source link), then run `npm run validate` to confirm every card name resolves against the dataset and each list totals 60 cards.
+Edit `data/decks.json` (name, format, archetype, colors, mainboard, source link), then run `npm run validate` to confirm every card name resolves against the dataset and each list totals 60 cards.
 
 ## Deploying
 
-Push to `main` and enable **Settings → Pages → Source: GitHub Actions**. The `deploy` workflow publishes the `site/` folder.
+GitHub Pages serves the repository root of the published branch (**Settings →
+Pages → Deploy from a branch → root**). Pushing updated files is all that's
+needed — no build step.
 
 ---
 
